@@ -8,7 +8,7 @@ initial_composition_data = pd.DataFrame({
     "Material": [
         "HMS", "Shredded Scrap", "Pig Iron", "Ferro-Silicon", "Ferro-Manganese", "FeSiMg", "Copper Scrap", "FeMo", "Carburiser"
     ],
-    "Cost": [34, 32, 42, 120, 150, 210, 600, 2200, 80],
+    "Cost": [300, 320, 400, 2000, 1800, 2500, 450, 1500, 800],
     "C": [2.5, 3.0, 4.0, 0.0, 0.0, 0.0, 0.0, 0.0, 90.0],
     "Si": [0.5, 0.7, 1.0, 75.0, 0.0, 50.0, 0.0, 0.0, 0.0],
     "Mn": [0.3, 0.5, 0.1, 0.0, 70.0, 0.0, 0.0, 0.0, 0.0],
@@ -37,6 +37,9 @@ def main():
     st.write("### Editable Target Composition Ranges:")
     target_data = st.data_editor(initial_target_data, num_rows="dynamic")
 
+    # Get furnace size from user
+    furnace_size = st.number_input("Enter Furnace Size (in tons):", min_value=0.1, step=0.1, value=10.0)
+
     # Select elements to include in optimization
     all_elements = list(initial_composition_data.columns[2:])
     selected_elements = st.multiselect("Select elements to include in optimization:", all_elements, default=all_elements)
@@ -50,11 +53,11 @@ def main():
     costs = np.nan_to_num(composition_data["Cost"].values)  # Replace NaN with 0
 
     # Min and max constraints for each raw material
-    bounds = [(0, 1) for _ in valid_materials]  # Ensure feasibility by allowing small proportions
+    bounds = [(0, furnace_size) for _ in valid_materials]  # Ensure total sum matches furnace size
 
     # Chemical and property constraints
-    A_eq = np.array([[1] * len(valid_materials)])  # Sum of proportions = 1
-    b_eq = [1]
+    A_eq = np.array([[1] * len(valid_materials)])  # Sum of proportions = Furnace size
+    b_eq = [furnace_size]
 
     # Build inequality constraints for chemical compositions and properties
     A_ub = []
@@ -64,10 +67,10 @@ def main():
         if row["Property"] in composition_data.columns:
             chem_coeffs = np.nan_to_num(composition_data[row["Property"]].values)  # Replace NaN with 0
             A_ub.append(-chem_coeffs)  # For Min constraints
-            b_ub.append(-row["Min"] * 0.95)  # Allow slight relaxation
+            b_ub.append(-row["Min"] * furnace_size * 0.95)  # Scale by furnace size
 
             A_ub.append(chem_coeffs)  # For Max constraints
-            b_ub.append(row["Max"] * 1.05)  # Allow slight relaxation
+            b_ub.append(row["Max"] * furnace_size * 1.05)  # Scale by furnace size
 
     # Solve the optimization problem with feasibility adjustments
     res = linprog(
@@ -78,7 +81,8 @@ def main():
         optimized_proportions = res.x
         optimized_mix = pd.DataFrame({
             "Material": valid_materials,
-            "Proportion": optimized_proportions,
+            "Proportion (tons)": optimized_proportions,
+            "Proportion (kg)": optimized_proportions * 1000  # Convert tons to kg
         })
         st.write("### Optimized Charge Mix:")
         st.dataframe(optimized_mix)
