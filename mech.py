@@ -8,7 +8,7 @@ initial_composition_data = pd.DataFrame({
     "Material": [
         "HMS", "Shredded Scrap", "Pig Iron", "Ferro-Silicon", "Ferro-Manganese", "FeSiMg", "Copper Scrap", "FeMo", "Carburiser"
     ],
-    "Cost": [300, 320, 400, 2000, 1800, 2500, 450, 1500, 800],
+    "Cost": [34, 32, 42, 120, 150, 210, 600, 2200, 80],
     "C": [2.5, 3.0, 4.0, 0.0, 0.0, 0.0, 0.0, 0.0, 90.0],
     "Si": [0.5, 0.7, 1.0, 75.0, 0.0, 50.0, 0.0, 0.0, 0.0],
     "Mn": [0.3, 0.5, 0.1, 0.0, 70.0, 0.0, 0.0, 0.0, 0.0],
@@ -48,12 +48,17 @@ def main():
     composition_data = composition_data[["Material", "Cost"] + selected_elements]
     target_data = target_data[target_data["Property"].isin(selected_elements + ["Hardness", "Tensile Strength"])]
 
+    # Min and max constraints for each raw material
+    bounds = []
+    st.sidebar.write("### Set Material Constraints")
+    for material in composition_data["Material"]:
+        min_val = st.sidebar.slider(f"Min proportion for {material} (tons)", 0.0, furnace_size, 0.0)
+        max_val = st.sidebar.slider(f"Max proportion for {material} (tons)", 0.0, furnace_size, furnace_size)
+        bounds.append((min_val, max_val))
+
     # Define optimization parameters
     valid_materials = composition_data["Material"]
     costs = np.nan_to_num(composition_data["Cost"].values)  # Replace NaN with 0
-
-    # Min and max constraints for each raw material
-    bounds = [(0, furnace_size) for _ in valid_materials]  # Ensure total sum matches furnace size
 
     # Chemical and property constraints
     A_eq = np.array([[1] * len(valid_materials)])  # Sum of proportions = Furnace size
