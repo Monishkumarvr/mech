@@ -47,7 +47,7 @@ def main():
 
     # Define optimization parameters
     valid_materials = composition_data["Material"]
-    costs = composition_data["Cost"].values
+    costs = np.nan_to_num(composition_data["Cost"].values)  # Replace NaN with 0
 
     # Min and max constraints for each raw material
     bounds = []
@@ -67,7 +67,7 @@ def main():
 
     for i, row in target_data.iterrows():
         if row["Property"] in composition_data.columns:
-            chem_coeffs = composition_data[row["Property"]].fillna(0).values
+            chem_coeffs = np.nan_to_num(composition_data[row["Property"]].values)  # Replace NaN with 0
             A_ub.append(-chem_coeffs)  # For Min constraints
             b_ub.append(-row["Min"])
 
@@ -75,8 +75,8 @@ def main():
             b_ub.append(row["Max"])
 
     # Hardness and Tensile Strength Constraints
-    hardness_coeffs = 50 * composition_data.get("C", 0).values - 10 * composition_data.get("Si", 0).values
-    tensile_coeffs = 30 * composition_data.get("Mn", 0).values - 5 * composition_data.get("Si", 0).values
+    hardness_coeffs = 50 * np.nan_to_num(composition_data.get("C", 0).values) - 10 * np.nan_to_num(composition_data.get("Si", 0).values)
+    tensile_coeffs = 30 * np.nan_to_num(composition_data.get("Mn", 0).values) - 5 * np.nan_to_num(composition_data.get("Si", 0).values)
 
     A_ub.append(-hardness_coeffs)
     b_ub.append(-target_data[target_data["Property"] == "Hardness"]["Min"].values[0])
