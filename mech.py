@@ -56,10 +56,25 @@ def main():
     composition_data = composition_data[["Material", "Cost"] + selected_elements]
     target_data = target_data[target_data["Property"].isin(selected_elements + ["Hardness", "Tensile Strength"])]
 
+    # Define optimization constraints
+    A_eq = np.array([[1] * len(composition_data)])  # Sum of proportions = Furnace size
+    b_eq = [furnace_size]
+    A_ub = []
+    b_ub = []
+
+    # Add composition constraints
+    for i, row in target_data.iterrows():
+        if row["Property"] in composition_data.columns:
+            chem_coeffs = np.nan_to_num(composition_data[row["Property"]].values)
+            A_ub.append(-chem_coeffs)
+            b_ub.append(-row["Min"] * furnace_size)
+            A_ub.append(chem_coeffs)
+            b_ub.append(row["Max"] * furnace_size)
+
     # Solve the optimization problem
     res = linprog(
-        c=np.nan_to_num(composition_data["Cost"].values), A_eq=np.array([[1] * len(composition_data)]),
-        b_eq=[furnace_size], A_ub=np.array([]), b_ub=np.array([]), bounds=bounds, method="highs"
+        c=np.nan_to_num(composition_data["Cost"].values), A_eq=A_eq, b_eq=b_eq,
+        A_ub=np.array(A_ub), b_ub=np.array(b_ub), bounds=bounds, method="highs"
     )
 
     if res.success:
@@ -69,20 +84,8 @@ def main():
             "Proportion (tons)": optimized_proportions,
             "Proportion (kg)": optimized_proportions * 1000
         })
-        
-        # Compute final hardness and tensile strength
-        final_C = np.dot(optimized_proportions, composition_data.get("C", 0).values)
-        final_Si = np.dot(optimized_proportions, composition_data.get("Si", 0).values)
-        final_Mn = np.dot(optimized_proportions, composition_data.get("Mn", 0).values)
-        
-        final_hardness = 200 + 50 * final_C - 10 * final_Si
-        final_tensile = 300 + 30 * final_Mn - 5 * final_Si
-        
         st.write("### Optimized Charge Mix:")
         st.dataframe(optimized_mix)
-        
-        st.write(f"### Final Hardness: {final_hardness:.2f}")
-        st.write(f"### Final Tensile Strength: {final_tensile:.2f}")
     else:
         st.warning("Optimization failed. Adjust constraints for feasibility.")
 
