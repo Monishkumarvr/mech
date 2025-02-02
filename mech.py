@@ -48,26 +48,39 @@ def main():
     composition_data = composition_data[["Material", "Cost"] + selected_elements]
     target_data = target_data[target_data["Property"].isin(selected_elements + ["Hardness", "Tensile Strength"])]
 
-    # Compute final hardness and tensile strength
-    final_hardness = 200 + 50 * composition_data.get("C", 0).sum() - 10 * composition_data.get("Si", 0).sum()
-    final_tensile = 300 + 30 * composition_data.get("Mn", 0).sum() - 5 * composition_data.get("Si", 0).sum()
+    # Define optimization constraints
+    A_eq = np.array([[1] * len(composition_data)])  # Sum of proportions = Furnace size
+    b_eq = [furnace_size]
+    A_ub = []
+    b_ub = []
 
-    # Display results
-    st.write(f"### Final Hardness: {final_hardness}")
-    st.write(f"### Final Tensile Strength: {final_tensile}")
+    # Add composition constraints
+    for i, row in target_data.iterrows():
+        if row["Property"] in composition_data.columns:
+            chem_coeffs = np.nan_to_num(composition_data[row["Property"]].values)
+            A_ub.append(-chem_coeffs)
+            b_ub.append(-row["Min"] * furnace_size)
+            A_ub.append(chem_coeffs)
+            b_ub.append(row["Max"] * furnace_size)
 
-    # Min and max constraints for each raw material
-    bounds = []
-    st.sidebar.write("### Set Material Constraints")
-    for material in composition_data["Material"]:
-        min_val = st.sidebar.slider(f"Min proportion for {material} (tons)", 0.0, furnace_size, 0.0)
-        max_val = st.sidebar.slider(f"Max proportion for {material} (tons)", 0.0, furnace_size, furnace_size)
-        bounds.append((min_val, max_val))
+    # Hardness Constraint
+    hardness_coeffs = 50 * composition_data.get("C", 0).values - 10 * composition_data.get("Si", 0).values
+    A_ub.append(-hardness_coeffs)
+    b_ub.append(-target_data[target_data["Property"] == "Hardness"]["Min"].values[0])
+    A_ub.append(hardness_coeffs)
+    b_ub.append(target_data[target_data["Property"] == "Hardness"]["Max"].values[0])
 
-    # Solve the optimization problem with feasibility adjustments
+    # Tensile Strength Constraint
+    tensile_coeffs = 30 * composition_data.get("Mn", 0).values - 5 * composition_data.get("Si", 0).values
+    A_ub.append(-tensile_coeffs)
+    b_ub.append(-target_data[target_data["Property"] == "Tensile Strength"]["Min"].values[0])
+    A_ub.append(tensile_coeffs)
+    b_ub.append(target_data[target_data["Property"] == "Tensile Strength"]["Max"].values[0])
+
+    # Solve the optimization problem
     res = linprog(
-        c=np.nan_to_num(composition_data["Cost"].values), A_eq=np.array([[1] * len(composition_data)]),
-        b_eq=[furnace_size], bounds=bounds, method="highs"
+        c=np.nan_to_num(composition_data["Cost"].values), A_eq=A_eq, b_eq=b_eq,
+        A_ub=np.array(A_ub), b_ub=np.array(b_ub), bounds=[(0, furnace_size)] * len(composition_data), method="highs"
     )
 
     if res.success:
@@ -75,16 +88,12 @@ def main():
         optimized_mix = pd.DataFrame({
             "Material": composition_data["Material"],
             "Proportion (tons)": optimized_proportions,
-            "Proportion (kg)": optimized_proportions * 1000  # Convert tons to kg
+            "Proportion (kg)": optimized_proportions * 1000
         })
         st.write("### Optimized Charge Mix:")
         st.dataframe(optimized_mix)
     else:
         st.warning("Optimization failed. Adjust constraints for feasibility.")
-        st.write("Possible solutions:")
-        st.write("- Relax min/max constraints by a small percentage.")
-        st.write("- Increase the range for key elements.")
-        st.write("- Allow higher flexibility in material proportions.")
 
 if __name__ == "__main__":
     main()
