@@ -3,11 +3,11 @@ import pandas as pd
 import numpy as np
 from scipy.optimize import linprog
 
-# -------------------------------------------
-# Example Coefficients (Replace with real data)
-# -------------------------------------------
+# --------------------------------------------------------------------
+# 1) Hardness/Tensile Coefficients (Excluding the Constant in the Array)
+# --------------------------------------------------------------------
+HARDNESS_CONSTANT = 50.0  # e.g., base hardness
 HARDNESS_COEFFS = {
-    "constant": 50,
     "C": 40,
     "Si": -15,
     "Mn": 10,
@@ -19,8 +19,8 @@ HARDNESS_COEFFS = {
     "Cr": 3
 }
 
+TENSILE_CONSTANT = 300.0  # e.g., base tensile
 TENSILE_COEFFS = {
-    "constant": 300,
     "C": 20,
     "Si": -10,
     "Mn": 25,
@@ -32,238 +32,261 @@ TENSILE_COEFFS = {
     "Cr": 5
 }
 
-# -------------------------------------------
-# Initial Data
-# -------------------------------------------
+# --------------------------------------------------------------------
+# 2) Sample Raw Materials
+# --------------------------------------------------------------------
 initial_composition_data = pd.DataFrame({
     "Material": [
-        "HMS", "Shredded Scrap", "Pig Iron", "Ferro-Silicon", "Ferro-Manganese", "FeSiMg", "Copper Scrap", "FeMo", "Carburiser"
+        "HMS", "Shredded Scrap", "Pig Iron", "Ferro-Silicon", 
+        "Ferro-Manganese", "FeSiMg", "Copper Scrap", "FeMo", 
+        "Carburiser"
     ],
     "Cost": [34, 32, 42, 120, 150, 210, 600, 2200, 80],
-    "C": [2.5, 3.0, 4.0, 0.0, 0.0, 0.0, 0.0, 0.0, 90.0],
-    "Si": [0.5, 0.7, 1.0, 75.0, 0.0, 50.0, 0.0, 0.0, 0.0],
-    "Mn": [0.3, 0.5, 0.1, 0.0, 70.0, 0.0, 0.0, 0.0, 0.0],
-    "S": [0.05, 0.03, 0.01, 0.0, 0.0, 0.0, 0.0, 0.0, 0.1],
-    "P": [0.02, 0.015, 0.01, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-    "Cu": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 90.0, 0.0, 0.0],
-    "Ni": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 70.0, 0.0],
-    "Mo": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 10.0, 0.0],
-    "Cr": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 5.0, 0.0]
+    "C": [2.5, 3.0, 4.0, 0.0, 0.0, 0.0, 0.0,  0.0, 90.0],
+    "Si": [0.5, 0.7, 1.0, 75.0, 0.0, 50.0, 0.0,  0.0,  0.0],
+    "Mn": [0.3, 0.5, 0.1, 0.0, 70.0,  0.0, 0.0,  0.0,  0.0],
+    "S":  [0.05, 0.03, 0.01, 0.0,  0.0,  0.0, 0.0,  0.0,  0.1],
+    "P":  [0.02, 0.015,0.01, 0.0,  0.0,  0.0, 0.0,  0.0,  0.0],
+    "Cu": [0.0,  0.0,  0.0,  0.0,  0.0,  0.0, 90.0, 0.0,  0.0],
+    "Ni": [0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0, 70.0, 0.0],
+    "Mo": [0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0, 10.0, 0.0],
+    "Cr": [0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  5.0,  0.0],
 })
 
+# --------------------------------------------------------------------
+# 3) Sample Target Ranges
+# --------------------------------------------------------------------
 initial_target_data = pd.DataFrame({
-    "Property": ["C", "Si", "Mn", "S", "P", "Cu", "Ni", "Mo", "Cr", "Hardness", "Tensile Strength"],
-    "Min": [3.2, 1.5, 0.5, 0.01, 0.01, 0.05, 0.0, 0.0, 0.0, 180, 300],
-    "Max": [3.6, 2.5, 1.0, 0.05, 0.02, 0.5, 0.2, 0.1, 0.1, 220, 350]
+    "Property": [
+        "C", "Si", "Mn", "S", "P", "Cu", "Ni", "Mo", "Cr", 
+        "Hardness", "Tensile Strength"
+    ],
+    "Min": [3.2, 1.5, 0.5, 0.01, 0.01, 0.05, 0.0, 0.0, 0.0, 
+            180, 300],
+    "Max": [3.6, 2.5, 1.0, 0.05, 0.02, 0.5, 0.2, 0.1, 0.1, 
+            220, 350]
 })
 
 def main():
     st.title("Charge Mix Optimization")
 
-    # Section 1: Composition Data
-    st.write("### Editable Raw Material Compositions:")
+    # -----------------------------------------------
+    # A) Let users edit composition and target data
+    # -----------------------------------------------
+    st.subheader("Raw Material Compositions (editable):")
     composition_data = st.data_editor(initial_composition_data, num_rows="dynamic")
 
-    # Section 2: Target Data
-    st.write("### Editable Target Composition Ranges:")
+    st.subheader("Target Composition Ranges (editable):")
     target_data = st.data_editor(initial_target_data, num_rows="dynamic")
 
-    # Section 3: Furnace Size
-    furnace_size = st.number_input("Enter Furnace Size (in tons):", min_value=0.1, step=0.1, value=10.0)
+    # -----------------------------------------------
+    # B) Furnace size
+    # -----------------------------------------------
+    furnace_size = st.number_input(
+        "Enter Furnace Size (tons):", 
+        min_value=0.1, step=0.1, value=10.0
+    )
 
-    # Section 4: Per-Material Bounds
+    # -----------------------------------------------
+    # C) Bounds for each raw material
+    # -----------------------------------------------
+    st.sidebar.header("Material Proportion Constraints")
     bounds = []
-    st.sidebar.write("### Set Material Constraints")
     for material in composition_data["Material"]:
-        min_val = st.sidebar.slider(f"Min proportion for {material} (tons)", 0.0, furnace_size, 0.0)
-        max_val = st.sidebar.slider(f"Max proportion for {material} (tons)", 0.0, furnace_size, furnace_size)
+        min_val = st.sidebar.slider(
+            f"Min {material} (tons)", 0.0, furnace_size, 0.0
+        )
+        max_val = st.sidebar.slider(
+            f"Max {material} (tons)", 0.0, furnace_size, furnace_size
+        )
         bounds.append((min_val, max_val))
 
-    # Section 5: Select elements to include in optimization
-    all_elements = list(initial_composition_data.columns[2:])
+    # -----------------------------------------------
+    # D) Select which elements to use
+    # -----------------------------------------------
+    all_elements = list(composition_data.columns[2:])  # e.g. C, Si, Mn, ...
     selected_elements = st.multiselect(
         "Select elements to include in optimization:",
         all_elements,
         default=all_elements
     )
 
-    # Filter data based on selected elements
+    # Filter composition_data columns
     composition_data = composition_data[["Material", "Cost"] + selected_elements]
-    # Keep only relevant rows in target_data
-    target_data = target_data[target_data["Property"].isin(selected_elements + ["Hardness", "Tensile Strength"])]
 
-    # --------------------------------------------------------------------------------
-    # Build Hardness & Tensile Coefficients for each Raw Material
-    # --------------------------------------------------------------------------------
-    def get_hardness_coefficient(row):
-        """Compute the 'per-ton' hardness contributed by this raw material."""
-        # Sum up k_element * row[element] for each element
-        hardness_val = HARDNESS_COEFFS["constant"]  # Start from the constant
-        for elem in selected_elements:
-            # If that element has a coefficient, multiply by content
-            if elem in HARDNESS_COEFFS:
-                hardness_val += HARDNESS_COEFFS[elem] * row[elem]
-        return hardness_val
+    # Filter target_data rows
+    target_data = target_data[
+        target_data["Property"].isin(selected_elements + ["Hardness", "Tensile Strength"])
+    ]
 
-    def get_tensile_coefficient(row):
-        """Compute the 'per-ton' tensile contributed by this raw material."""
-        tensile_val = TENSILE_COEFFS["constant"]
-        for elem in selected_elements:
-            if elem in TENSILE_COEFFS:
-                tensile_val += TENSILE_COEFFS[elem] * row[elem]
-        return tensile_val
+    # -----------------------------------------------
+    # E) Build Hardness & Tensile arrays (exclude constant)
+    # -----------------------------------------------
+    def hardness_contrib_per_ton(row):
+        val = 0.0
+        for elem, coeff in HARDNESS_COEFFS.items():
+            if elem in row.index:
+                val += coeff * row[elem]
+        return val
 
-    # Compute an array of hardness/tensile values for each row (raw material)
-    hardness_array = composition_data.apply(get_hardness_coefficient, axis=1).values
-    tensile_array = composition_data.apply(get_tensile_coefficient, axis=1).values
+    def tensile_contrib_per_ton(row):
+        val = 0.0
+        for elem, coeff in TENSILE_COEFFS.items():
+            if elem in row.index:
+                val += coeff * row[elem]
+        return val
 
-    # Next, we want the *total* hardness to be between Hardness Min and Max.
-    # The *total* hardness = sum( hardness_array[i] * x[i] ) / sum(x[i])?
-    # Or do we treat the "constant" as a purely additive term?
-    #
-    # Often, the simpler approach is to use the "per-ton" formula but
-    # skip the global 'constant' in the raw material portion. Instead,
-    # we incorporate the constant after summation. That means we’d have:
-    #
-    #   total_hardness = CONSTANT + Σ( coefficient[i] * x[i] )
-    #
-    # For the example’s sake, let's proceed with the linear approach below
-    # where we treat hardness_array[i] as the entire contribution from
-    # material i (including the constant). Because x[i] is in tons,
-    # the sum will yield an absolute hardness that is scaled by tons,
-    # which might or might not be what you want physically.
-    #
-    # If you want an *average* hardness, you’d have to divide the sum
-    # by the total mass. For demonstration, we’ll keep it simple:
-    #
-    #  total_hardness = sum( hardness_array[i]* x[i] ), and that must
-    #  lie between Hardness_min and Hardness_max.
+    hardness_array = composition_data.apply(hardness_contrib_per_ton, axis=1).values
+    tensile_array = composition_data.apply(tensile_contrib_per_ton, axis=1).values
 
-    # Identify the required min/max from target_data
+    # -----------------------------------------------
+    # F) Extract Hardness/Tensile min/max from target_data
+    # -----------------------------------------------
     hardness_min = target_data.loc[target_data["Property"] == "Hardness", "Min"].values[0]
     hardness_max = target_data.loc[target_data["Property"] == "Hardness", "Max"].values[0]
     tensile_min = target_data.loc[target_data["Property"] == "Tensile Strength", "Min"].values[0]
     tensile_max = target_data.loc[target_data["Property"] == "Tensile Strength", "Max"].values[0]
 
-    # We'll set up inequalities for hardness and tensile:
-    #
-    # hardness_min <= SUM(hardness_array[i]*x[i]) <= hardness_max
-    #  => - SUM(hardness_array[i]*x[i]) <= - hardness_min
-    #  => SUM(hardness_array[i]*x[i])   <= hardness_max
-    #
-    # tensile_min <= SUM(tensile_array[i]*x[i]) <= tensile_max
-
+    # --------------------------------------------------------
+    # G) Build inequality constraints (A_ub x <= b_ub) 
+    #    for Hardness and Tensile (average-based)
+    # --------------------------------------------------------
     A_ub = []
     b_ub = []
 
+    # Hardness (avg) = HARDNESS_CONSTANT + (1/furnace_size)*sum(hardness_array[i]*x[i])
+    #
+    # => hardness_min <= ... <= hardness_max
+    # => hardness_min - HARDNESS_CONSTANT <= (1/furnace_size)*sum(...) <= hardness_max - HARDNESS_CONSTANT
+    # => furnace_size*(hardness_min - HARDNESS_CONSTANT) <= sum(...) <= furnace_size*(hardness_max - HARDNESS_CONSTANT)
+
     # Hardness >= hardness_min
-    # => -hardness_array . x <= -hardness_min
-    A_ub.append(-hardness_array)
-    b_ub.append(-hardness_min)
+    A_ub.append(-hardness_array)  # we do -sum(...) <= -lower_bound
+    b_ub.append(
+        -furnace_size*(hardness_min - HARDNESS_CONSTANT)
+    )
 
     # Hardness <= hardness_max
     A_ub.append(hardness_array)
-    b_ub.append(hardness_max)
+    b_ub.append(
+        furnace_size*(hardness_max - HARDNESS_CONSTANT)
+    )
+
+    # Tensile (avg) = TENSILE_CONSTANT + (1/furnace_size)*sum(tensile_array[i]*x[i])
+    #
+    # => tensile_min <= ... <= tensile_max
+    # => tensile_min - TENSILE_CONSTANT <= (1/furnace_size)*sum(...) <= tensile_max - TENSILE_CONSTANT
+    # => furnace_size*(tensile_min - TENSILE_CONSTANT) <= sum(...) <= furnace_size*(tensile_max - TENSILE_CONSTANT)
 
     # Tensile >= tensile_min
     A_ub.append(-tensile_array)
-    b_ub.append(-tensile_min)
+    b_ub.append(
+        -furnace_size*(tensile_min - TENSILE_CONSTANT)
+    )
 
     # Tensile <= tensile_max
     A_ub.append(tensile_array)
-    b_ub.append(tensile_max)
+    b_ub.append(
+        furnace_size*(tensile_max - TENSILE_CONSTANT)
+    )
 
-    # Next, we also have composition constraints for each element
-    # if you want each element to be within a certain min/max in the *final melt*.
-    # For example:
-    #    sum( C_i * x[i] ) / sum(x[i]) >= C_min
-    #    sum( C_i * x[i] ) / sum(x[i]) <= C_max
-    #
-    # or if you want it absolute:
-    #    sum( C_i * x[i] ) >= some_val
-    #
-    # The code snippet below shows how you might handle the "average" composition constraints:
-
+    # ----------------------------------------------------
+    # H) Composition constraints for each element
+    # ----------------------------------------------------
+    # We want each element's average composition to be within [min, max].
+    # If target_data says "C" min=3.2, max=3.6, that means:
+    #      3.2 <= (sum(C_i * x[i]) / sum(x[i])) <= 3.6
+    # But sum(x[i]) = furnace_size. So:
+    #      3.2*furnace_size <= sum(C_i*x[i]) <= 3.6*furnace_size
+    # We'll do that for each element in selected_elements if target_data is present.
     for prop in selected_elements:
-        # Get min, max from target_data if they exist
+        # Check if we have min/max in target_data
         row_target = target_data[target_data["Property"] == prop]
         if not row_target.empty:
             min_val = row_target["Min"].values[0]
             max_val = row_target["Max"].values[0]
 
-            # We want: min_val <= (Σ (prop_i * x[i])) / total_tons <= max_val
-            # => min_val * total_tons <= Σ (prop_i * x[i]) <= max_val * total_tons
-            #
-            # Because sum(x[i]) = furnace_size (b_eq below),
-            # we can rewrite:
-            #    min_val * furnace_size <= Σ (prop_i * x[i]) <= max_val * furnace_size
-
             prop_array = composition_data[prop].values
 
-            # Lower bound
-            A_ub.append(-prop_array)  # - Σ(prop_i * x[i]) <= - (min_val * furnace_size)
-            b_ub.append(-min_val * furnace_size)
+            # Lower bound: sum(prop_array[i]*x[i]) >= furnace_size*min_val
+            A_ub.append(-prop_array)
+            b_ub.append(-furnace_size * min_val)
 
-            # Upper bound
-            A_ub.append(prop_array)   # Σ(prop_i * x[i]) <= max_val * furnace_size
-            b_ub.append(max_val * furnace_size)
+            # Upper bound: sum(prop_array[i]*x[i]) <= furnace_size*max_val
+            A_ub.append(prop_array)
+            b_ub.append(furnace_size * max_val)
 
-    # Convert A_ub, b_ub to arrays
-    A_ub = np.array(A_ub)
-    b_ub = np.array(b_ub)
+    # Convert to numpy
+    A_ub = np.array(A_ub, dtype=float)
+    b_ub = np.array(b_ub, dtype=float)
 
-    # Now define equality constraint to ensure total mass = furnace_size
-    A_eq = np.array([[1]*len(composition_data)])
+    # ----------------------------------------------------
+    # I) Equality constraint for total mass
+    # ----------------------------------------------------
+    # sum(x[i]) = furnace_size
+    A_eq = np.array([[1]*len(composition_data)], dtype=float)
     b_eq = [furnace_size]
 
-    # Solve the LP
-    c = np.nan_to_num(composition_data["Cost"].values)  # objective: min cost
+    # ----------------------------------------------------
+    # J) Objective: Minimize Cost
+    # ----------------------------------------------------
+    c = np.nan_to_num(composition_data["Cost"].values, nan=0.0)
 
+    # ----------------------------------------------------
+    # K) Solve with linprog
+    # ----------------------------------------------------
     res = linprog(
         c=c,
-        A_eq=A_eq,
-        b_eq=b_eq,
         A_ub=A_ub,
         b_ub=b_ub,
-        bounds=bounds,
+        A_eq=A_eq,
+        b_eq=b_eq,
+        bounds=bounds,   # per-material min/max
         method="highs"
     )
 
-    # ----------------------------------------------------------
-    # Report Results
-    # ----------------------------------------------------------
+    # ----------------------------------------------------
+    # L) Report solution
+    # ----------------------------------------------------
     if res.success:
+        st.success("Optimization Succeeded!")
         optimized_proportions = res.x
-        optimized_mix = pd.DataFrame({
+
+        # Summarize
+        solution_df = pd.DataFrame({
             "Material": composition_data["Material"],
             "Proportion (tons)": optimized_proportions,
-            "Proportion (kg)": optimized_proportions * 1000
+            "Proportion (kg)": optimized_proportions*1000
         })
+        st.write("### Optimized Charge Mix")
+        st.dataframe(solution_df)
 
-        st.write("### Optimized Charge Mix:")
-        st.dataframe(optimized_mix)
-
-        # Calculate final composition for each selected element
-        final_comp = {}
+        # Final composition for each element (Absolute)
+        final_composition = {}
         for elem in selected_elements:
-            final_comp[elem] = np.dot(optimized_proportions, composition_data[elem].values)
+            final_composition[elem] = np.dot(optimized_proportions, composition_data[elem].values)
 
-        # If you want average composition per ton:
-        #   final_comp[elem] / furnace_size
-        # This is optional, depending on whether you want absolute or average.
+        st.write("### Final Composition (Absolute Amount)")
+        st.json(final_composition)
 
-        st.write("### Final Composition (Absolute):")
-        st.json(final_comp)
+        # Average composition can also be reported:
+        avg_composition = {k: v/furnace_size for k,v in final_composition.items()}
+        st.write("### Final Composition (Average per ton)")
+        st.json(avg_composition)
 
-        # Calculate total Hardness and Tensile
-        total_hardness = np.dot(hardness_array, optimized_proportions)
-        total_tensile = np.dot(tensile_array, optimized_proportions)
+        # Compute final average Hardness & Tensile
+        total_hardness_contrib = np.dot(hardness_array, optimized_proportions)
+        avg_hardness = HARDNESS_CONSTANT + (total_hardness_contrib / furnace_size)
 
-        st.write(f"#### Final Hardness: {total_hardness:.2f}")
-        st.write(f"#### Final Tensile Strength: {total_tensile:.2f}")
+        total_tensile_contrib = np.dot(tensile_array, optimized_proportions)
+        avg_tensile = TENSILE_CONSTANT + (total_tensile_contrib / furnace_size)
+
+        st.write(f"**Final Average Hardness:** {avg_hardness:.2f}")
+        st.write(f"**Final Average Tensile Strength:** {avg_tensile:.2f}")
 
     else:
-        st.warning("Optimization failed. Adjust constraints for feasibility.")
+        st.error("Optimization failed. Try relaxing constraints or checking data consistency.")
+        st.write("Solver Message:", res.message)
 
 if __name__ == "__main__":
     main()
