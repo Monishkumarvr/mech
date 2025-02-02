@@ -84,7 +84,7 @@ def main():
             if prop in composition_data.columns:
                 resulting_properties[prop] = np.dot(optimized_proportions, composition_data[prop].values)
 
-        resulting_properties["Hardness"] = 200 + 50 * resulting_properties.get("C", 0) - 10 * resulting_properties.get("Si", 0)
+        resulting_properties["Hardness"] = 50 + 50 * resulting_properties.get("C", 0) - 10 * resulting_properties.get("Si", 0)
         resulting_properties["Tensile Strength"] = 300 + 30 * resulting_properties.get("Mn", 0) - 5 * resulting_properties.get("Si", 0)
 
         st.write("### Optimized Charge Mix:")
