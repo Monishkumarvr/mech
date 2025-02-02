@@ -40,6 +40,14 @@ def main():
     # Get furnace size from user
     furnace_size = st.number_input("Enter Furnace Size (in tons):", min_value=0.1, step=0.1, value=10.0)
 
+    # Min and max constraints for each raw material
+    bounds = []
+    st.sidebar.write("### Set Material Constraints")
+    for material in composition_data["Material"]:
+        min_val = st.sidebar.slider(f"Min proportion for {material} (tons)", 0.0, furnace_size, 0.0)
+        max_val = st.sidebar.slider(f"Max proportion for {material} (tons)", 0.0, furnace_size, furnace_size)
+        bounds.append((min_val, max_val))
+
     # Select elements to include in optimization
     all_elements = list(initial_composition_data.columns[2:])
     selected_elements = st.multiselect("Select elements to include in optimization:", all_elements, default=all_elements)
@@ -63,24 +71,10 @@ def main():
             A_ub.append(chem_coeffs)
             b_ub.append(row["Max"] * furnace_size)
 
-    # Hardness Constraint
-    hardness_coeffs = 50 * composition_data.get("C", 0).values - 10 * composition_data.get("Si", 0).values
-    A_ub.append(-hardness_coeffs)
-    b_ub.append(-target_data[target_data["Property"] == "Hardness"]["Min"].values[0])
-    A_ub.append(hardness_coeffs)
-    b_ub.append(target_data[target_data["Property"] == "Hardness"]["Max"].values[0])
-
-    # Tensile Strength Constraint
-    tensile_coeffs = 30 * composition_data.get("Mn", 0).values - 5 * composition_data.get("Si", 0).values
-    A_ub.append(-tensile_coeffs)
-    b_ub.append(-target_data[target_data["Property"] == "Tensile Strength"]["Min"].values[0])
-    A_ub.append(tensile_coeffs)
-    b_ub.append(target_data[target_data["Property"] == "Tensile Strength"]["Max"].values[0])
-
     # Solve the optimization problem
     res = linprog(
         c=np.nan_to_num(composition_data["Cost"].values), A_eq=A_eq, b_eq=b_eq,
-        A_ub=np.array(A_ub), b_ub=np.array(b_ub), bounds=[(0, furnace_size)] * len(composition_data), method="highs"
+        A_ub=np.array(A_ub), b_ub=np.array(b_ub), bounds=bounds, method="highs"
     )
 
     if res.success:
