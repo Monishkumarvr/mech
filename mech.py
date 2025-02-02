@@ -94,10 +94,12 @@ def main():
         st.write("### Optimized Charge Mix:")
         st.dataframe(optimized_mix)
 
-        # Compute final hardness and tensile strength
-        final_C = np.dot(optimized_proportions, composition_data.get("C", 0).values)
-        final_Si = np.dot(optimized_proportions, composition_data.get("Si", 0).values)
-        final_Mn = np.dot(optimized_proportions, composition_data.get("Mn", 0).values)
+        # Compute final composition values
+        final_composition = {}
+        for element in selected_elements:
+            final_composition[element] = np.dot(optimized_proportions, composition_data.get(element, 0).values)
+
+        st.write(final_composition)
 
         # Compute final hardness and tensile strength
         final_hardness = 200 + 50 * final_composition.get("C", 0) - 10 * final_composition.get("Si", 0)
