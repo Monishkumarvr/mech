@@ -57,8 +57,8 @@ def main():
     target_data = target_data[target_data["Property"].isin(selected_elements + ["Hardness", "Tensile Strength"])]
 
     # Define hardness and tensile strength constraints
-    hardness_coeffs = 50 * composition_data.get("C", 0).values - 10 * composition_data.get("Si", 0).values
-    tensile_coeffs = 30 * composition_data.get("Mn", 0).values - 5 * composition_data.get("Si", 0).values
+    hardness_coeffs = 50 + 50 * composition_data.get("C", 0).values - 10 * composition_data.get("Si", 0).values
+    tensile_coeffs = 300 + 30 * composition_data.get("Mn", 0).values - 5 * composition_data.get("Si", 0).values
 
     A_ub = [
         -hardness_coeffs,  # Hardness min constraint
@@ -102,12 +102,12 @@ def main():
         st.write(final_composition)
 
         # Compute final hardness and tensile strength
-        final_hardness = 200 + 50 * final_composition.get("C", 0) - 10 * final_composition.get("Si", 0)
+        final_hardness = 50 + 50 * final_composition.get("C", 0) - 10 * final_composition.get("Si", 0)
         final_tensile = 300 + 30 * final_composition.get("Mn", 0) - 5 * final_composition.get("Si", 0)
 
         # Display results
-        st.write(f"### Final Hardness: {final_hardness:.2f}")
-        st.write(f"### Final Tensile Strength: {final_tensile:.2f}")
+        st.write(f"#### Final Hardness: {final_hardness:.2f}")
+        st.write(f"#### Final Tensile Strength: {final_tensile:.2f}")
         
     else:
         st.warning("Optimization failed. Adjust constraints for feasibility.")
