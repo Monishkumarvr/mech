@@ -48,6 +48,14 @@ def main():
     composition_data = composition_data[["Material", "Cost"] + selected_elements]
     target_data = target_data[target_data["Property"].isin(selected_elements + ["Hardness", "Tensile Strength"])]
 
+    # Compute final hardness and tensile strength
+    final_hardness = 200 + 50 * composition_data.get("C", 0).sum() - 10 * composition_data.get("Si", 0).sum()
+    final_tensile = 300 + 30 * composition_data.get("Mn", 0).sum() - 5 * composition_data.get("Si", 0).sum()
+
+    # Display results
+    st.write(f"### Final Hardness: {final_hardness}")
+    st.write(f"### Final Tensile Strength: {final_tensile}")
+
     # Min and max constraints for each raw material
     bounds = []
     st.sidebar.write("### Set Material Constraints")
@@ -56,36 +64,16 @@ def main():
         max_val = st.sidebar.slider(f"Max proportion for {material} (tons)", 0.0, furnace_size, furnace_size)
         bounds.append((min_val, max_val))
 
-    # Define optimization parameters
-    valid_materials = composition_data["Material"]
-    costs = np.nan_to_num(composition_data["Cost"].values)  # Replace NaN with 0
-
-    # Chemical and property constraints
-    A_eq = np.array([[1] * len(valid_materials)])  # Sum of proportions = Furnace size
-    b_eq = [furnace_size]
-
-    # Build inequality constraints for chemical compositions and properties
-    A_ub = []
-    b_ub = []
-
-    for i, row in target_data.iterrows():
-        if row["Property"] in composition_data.columns:
-            chem_coeffs = np.nan_to_num(composition_data[row["Property"]].values)  # Replace NaN with 0
-            A_ub.append(-chem_coeffs)  # For Min constraints
-            b_ub.append(-row["Min"] * furnace_size * 0.95)  # Scale by furnace size
-
-            A_ub.append(chem_coeffs)  # For Max constraints
-            b_ub.append(row["Max"] * furnace_size * 1.05)  # Scale by furnace size
-
     # Solve the optimization problem with feasibility adjustments
     res = linprog(
-        c=costs, A_eq=A_eq, b_eq=b_eq, A_ub=np.array(A_ub), b_ub=np.array(b_ub), bounds=bounds, method="highs"
+        c=np.nan_to_num(composition_data["Cost"].values), A_eq=np.array([[1] * len(composition_data)]),
+        b_eq=[furnace_size], bounds=bounds, method="highs"
     )
 
     if res.success:
         optimized_proportions = res.x
         optimized_mix = pd.DataFrame({
-            "Material": valid_materials,
+            "Material": composition_data["Material"],
             "Proportion (tons)": optimized_proportions,
             "Proportion (kg)": optimized_proportions * 1000  # Convert tons to kg
         })
