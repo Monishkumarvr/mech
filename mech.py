@@ -74,6 +74,20 @@ def main():
             A_ub.append(chem_coeffs)  # For Max constraints
             b_ub.append(row["Max"])
 
+    # Hardness and Tensile Strength Constraints
+    hardness_coeffs = 50 * composition_data.get("C", 0).values - 10 * composition_data.get("Si", 0).values
+    tensile_coeffs = 30 * composition_data.get("Mn", 0).values - 5 * composition_data.get("Si", 0).values
+
+    A_ub.append(-hardness_coeffs)
+    b_ub.append(-target_data[target_data["Property"] == "Hardness"]["Min"].values[0])
+    A_ub.append(hardness_coeffs)
+    b_ub.append(target_data[target_data["Property"] == "Hardness"]["Max"].values[0])
+
+    A_ub.append(-tensile_coeffs)
+    b_ub.append(-target_data[target_data["Property"] == "Tensile Strength"]["Min"].values[0])
+    A_ub.append(tensile_coeffs)
+    b_ub.append(target_data[target_data["Property"] == "Tensile Strength"]["Max"].values[0])
+
     # Solve the optimization problem
     res = linprog(
         c=costs, A_eq=A_eq, b_eq=b_eq, A_ub=np.array(A_ub), b_ub=np.array(b_ub), bounds=bounds, method="highs"
@@ -85,18 +99,8 @@ def main():
             "Material": valid_materials,
             "Proportion": optimized_proportions,
         })
-
-        # Calculate resulting properties
-        resulting_properties = {}
-        for prop in target_data["Property"]:
-            if prop in composition_data.columns:
-                resulting_properties[prop] = np.dot(optimized_proportions, composition_data[prop].values)
-
         st.write("### Optimized Charge Mix:")
         st.dataframe(optimized_mix)
-
-        st.write("### Resulting Properties:")
-        st.json(resulting_properties)
     else:
         st.error(f"Optimization failed: {res.message}")
 
